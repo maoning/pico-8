@@ -8,6 +8,12 @@ __lua__
 -- 4. asteriod attack
 -- 5. internal events?
 
+-- bugs: drawing sprites out of bound
+
+-- todo: make asteroids rotate
+--       make different asteroids?
+--       add background
+
 -- player's unit speed
 player_spd = 0.2
 
@@ -23,7 +29,7 @@ playable_y_min = header_h+1
 playable_x_max = 126
 playable_y_max = 126
 
-shake_duration = 5
+shake_duration = 2
 
 function reset()
  player = {}
@@ -39,6 +45,13 @@ function reset()
  -- visuals 
  shake_screen = 0
  particles = {}
+ 
+ -- states
+ score = 0
+ t = 0
+ 
+ -- stars
+ stars = {}
 end
 
 function _init()
@@ -48,6 +61,19 @@ end
 function start_game()
  reset()
  mode = "game"
+ 
+ -- add stars credit: pat shooter game
+ for i = 0,64 do
+  s = {}
+  s.x = playable_x_min + rnd(playable_x_max - playable_x_min)
+  s.y = playable_y_min + rnd(playable_y_max - playable_y_min)
+  s.c = i/64
+  s.col = 1
+  if (s.c > 0.75) then
+   s.col = 12
+  end
+  add(stars, s)
+ end
 end
 
 function _update60()
@@ -59,6 +85,7 @@ function _update60()
 end
 
 function update_game()
+ t+=1
  update_player()
  update_bullets()
  update_asteroids()
@@ -95,7 +122,7 @@ function update_player()
 end
 
 function update_bullets()
- if (btnp(4)) then
+ if (btn(4) and (t%7) == 0) then
   local bullet = {}
   bullet.x = player.x + 8
   bullet.y = player.y + 4
@@ -129,6 +156,7 @@ function update_asteroids()
   elseif hit_by_bullet(item) then   
    sfx(2)
    shake_screen = 5
+   score += 1
    for i = 1,10 do
     make_particles(item.x, item.y)
    end
@@ -189,26 +217,34 @@ end
 
 function draw_game()
  cls()
- draw_background()
+ draw_stars()
  draw_header()
  draw_bullets()
  draw_asteroids()
  draw_player()
  draw_particles()
+ draw_frame()
 end
 
 function draw_gameover()
- rectfill(0,60,128,75,0)
+ rectfill(1,60,126,75,1)
  print("game over",46,62,7)
  print("press — to restart",27,68,6)
 end
 
-function draw_background()
+function draw_frame()
  rect(0, 0, 127, 127, 7)
 end
 
+function draw_stars()
+ for s in all(stars) do
+  pset((s.x-t*s.c)%128,s.y,s.col)
+ end
+end
+
 function draw_header()
- rectfill(0, 0, 127, header_h, 6)
+ rectfill(1, 1, 126, header_h, 6)
+ print("score:"..score,2,2,0)
 end
 
 function draw_player()
@@ -218,6 +254,7 @@ function draw_player()
   spr(explosion_stage, player.x, player.y)
   explosion_stage += 1
   if explosion_stage > 5 then
+   camera(0,0)
   	mode = "gameover"
  	end  
  end
@@ -287,7 +324,7 @@ function shake(reset) -- shake the screen
 	camera(0,0) -- reset to 0,0 before each shake so we don't drift
 
 	if not reset then -- if the param is true, don't shake, just reset the screen to default
-		camera(flr(rnd(10)-5),flr(rnd(10)-5)) -- define shake power here (-5 to shake equally in all directions)
+		camera(flr(rnd(2)-1),flr(rnd(2)-1)) -- define shake power here (-5 to shake equally in all directions)
 	end
 end
 
