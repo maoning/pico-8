@@ -23,6 +23,8 @@ playable_y_min = header_h+1
 playable_x_max = 126
 playable_y_max = 126
 
+shake_duration = 5
+
 function reset()
  player = {}
  player.x = 10
@@ -33,6 +35,10 @@ function reset()
  asteroids = {}
  player_is_alive = true
  explosion_stage = 3
+ 
+ -- visuals 
+ shake_screen = 0
+ particles = {}
 end
 
 function _init()
@@ -56,6 +62,7 @@ function update_game()
  update_player()
  update_bullets()
  update_asteroids()
+ update_particles()
 end
 
 function update_gameover()
@@ -119,12 +126,47 @@ function update_asteroids()
   item.x -= asteroid_spd
   if item.x < -7 then
    del(asteroids, item)
-  elseif hit_by_bullet(item) then
-   del(asteroids, item)
+  elseif hit_by_bullet(item) then   
    sfx(2)
+   shake_screen = 5
+   for i = 1,10 do
+    make_particles(item.x, item.y)
+   end
+   del(asteroids, item)
   elseif hit_player(item) then
    sfx(3)
    player_is_alive = false  
+  end
+ end
+end
+
+function update_particles()
+ for p in all(particles) do
+  --move the smoke
+  p.y += p.dy
+  p.x += p.dx
+  --increase the smoke's life counter
+  --so that it lives the correct number of steps
+  p.t += 1/p.life_time
+  
+  -- todo: remove particle if out of frame
+  
+  if p.t > 1 or 
+   p.x < playable_x_min or
+   p.x > playable_x_max or
+   p.y < playable_y_min or
+   p.y > playable_y_max then
+   del(particles, p)
+  elseif p.t > 0.8 then
+   p.col = 5
+  elseif p.t > 0.6 then
+   p.col = 6
+  elseif p.t > 0.4 then
+   p.col = 9
+  elseif p.t > 0.2 then 
+   p.col = 10
+  else
+   p.col = 8
   end
  end
 end
@@ -135,6 +177,14 @@ function _draw()
  elseif mode == "gameover" then
   draw_gameover()
  end
+ 
+ if shake_screen > 1 then
+  shake()
+  shake_screen -= 1
+ elseif shake_screen == 1 then
+  shake(true)
+  shake_screen -= 1
+ end
 end
 
 function draw_game()
@@ -144,6 +194,7 @@ function draw_game()
  draw_bullets()
  draw_asteroids()
  draw_player()
+ draw_particles()
 end
 
 function draw_gameover()
@@ -166,7 +217,7 @@ function draw_player()
  else
   spr(explosion_stage, player.x, player.y)
   explosion_stage += 1
-  if explosion_stage > 6 then
+  if explosion_stage > 5 then
   	mode = "gameover"
  	end  
  end
@@ -181,6 +232,12 @@ end
 function draw_asteroids()
  for item in all(asteroids) do
   spr(2,item.x, item.y)
+ end
+end
+
+function draw_particles()
+ for p in all(particles) do
+  pset(p.x, p.y, p.col)
  end
 end
 
@@ -224,15 +281,60 @@ function box_box(box1_x,box1_y,box2_x,box2_y)
  if box1_x+8 < box2_x then return false end
  return true
 end
+
+-- credit: github.com/jessemillar/pico-8
+function shake(reset) -- shake the screen
+	camera(0,0) -- reset to 0,0 before each shake so we don't drift
+
+	if not reset then -- if the param is true, don't shake, just reset the screen to default
+		camera(flr(rnd(10)-5),flr(rnd(10)-5)) -- define shake power here (-5 to shake equally in all directions)
+	end
+end
+
+-- credit: https://www.reddit.com/r/pico8/comments/5nedvn/sources_for_learning_particles/
+function make_particles(startx, starty)
+ 
+ --this section holds all the properties of a particle
+ --such as x,y,speed,duration,etc
+ --you can add as many properties as you want
+ local particle = {
+   --the location of the particle
+   x=startx,
+   y=starty,
+   --what percentage 'dead'is the particle
+   t = 0,
+   --how long before the particle fades
+   life_time=flr(10+rnd(20)),
+   --how big is the particle,
+   --and how large will it grow?
+   size = 1,
+   --max_size = 1+rnd(3),
+   
+   --'delta x/y' is the movement speed,
+   --or the change per update in position
+   --randomizing it gives variety to particles
+   dy = -3 + rnd(6),
+   dx = -3 + rnd(6),
+   --'ddy' is a kind of acceleration
+   --increasing speed each step
+   --this makes the particle seem to float
+   --ddy = -0.05,
+   --what color is the particle
+   col = 10
+ }
+ --after making the particle, add it to the list 'smoke'   
+ add(particles,particle)
+end
+
 __gfx__
-00000000999900000005550000980000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000066666000055555008999008090080000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00700700055966600555655590a99990009099000090900000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0007700005559666556555560aaaa990098a09900999000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0007700005559666555555559a9a8900009aa900009a990000000000000000000000000000000000000000000000000000000000000000000000000000000000
-007007000559666005565655980a9a9800909a8000a0900000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000066666000055555600809900080090000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000999900000005650000090000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000999900000005550000980000000000000000000090055500000000000000000000000000000000000000000000000000000000000000000000000000
+00000000066666000055555008999008090080000000000009555990000000000000000000000000000000000000000000000000000000000000000000000000
+00700700055966600555655590a9999000909900009090000a959a55000000000000000000000000000000000000000000000000000000000000000000000000
+0007700005559666556555560aaaa990098a099009990000556a8556000000000000000000000000000000000000000000000000000000000000000000000000
+0007700005559666555555559a9a8900009aa900009a990055a88955000000000000000000000000000000000000000000000000000000000000000000000000
+007007000559666005565655980a9a9800909a8000a0900005a95a95000000000000000000000000000000000000000000000000000000000000000000000000
+00000000066666000055555600809900080090000000000009055509000000000000000000000000000000000000000000000000000000000000000000000000
+00000000999900000005650000090000000000000000000000056500000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
