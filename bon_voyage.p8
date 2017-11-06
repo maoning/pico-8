@@ -8,19 +8,12 @@ __lua__
 -- 4. asteriod attack
 -- 5. internal events?
 
--- bugs: drawing sprites out of bound
+-- bugs: small asteroids overlaps with bigger ones
 
--- todo: make asteroids rotate
---       make different asteroids?
---       add background
-
--- player's unit speed
-player_spd = 0.2
+-- todo: light strike when accelerate forward
 
 bullet_spd = 2
 bullet_r = 1
-
-asteroid_spd = 1
 
 header_h = 7
 
@@ -31,12 +24,34 @@ playable_y_max = 126
 
 shake_duration = 2
 
+-- each ship has sprite#, speed, lives, bullets#
+sprite = 1
+speed = 2
+lives = 3
+bullet_cap = 4
+ships = {{1,0.2,1,1},{16,0.1,1,2}}
+current_ship = 0
+
+-- asteroids
+ast_spd = 1
+ast_size = 2
+ast_position = 3
+asteroid_types = {{1,8,{16,0,8,8}},
+                  {2,4,{64,0,4,4}},
+                  {2,4,{68,0,4,4}},
+                  {2,4,{64,4,4,4}},
+                  {2,4,{68,4,4,4}}}
+
+delay = 0
+
 function reset()
  player = {}
  player.x = 10
  player.y = 64
  player.spd_x = 0
  player.spd_y = 0
+ player.spd = ships[current_ship+1][speed]
+ player.sprt = ships[current_ship+1][sprite]
  bullets = {}
  asteroids = {}
  player_is_alive = true
@@ -55,7 +70,12 @@ function reset()
 end
 
 function _init()
- start_game()
+ t = 0
+ menu()
+end
+
+function menu()
+ mode = "menu"
 end
 
 function start_game()
@@ -77,15 +97,29 @@ function start_game()
 end
 
 function _update60()
- if mode == "game" then
+ t+=1
+ if mode == "menu" then
+  update_menu()
+ elseif mode == "game" then
   update_game()
  elseif mode == "gameover" then
   update_gameover()
  end 
 end
 
+function update_menu()
+ if btnp(4) then
+  start_game()
+ end
+ if btnp(0) then
+  current_ship = (current_ship-1)%#ships
+ elseif btnp(1) then 
+  current_ship = (current_ship+1)%#ships
+ end
+ print(current_ship)
+end
+
 function update_game()
- t+=1
  update_player()
  update_bullets()
  update_asteroids()
@@ -93,22 +127,27 @@ function update_game()
 end
 
 function update_gameover()
- if (btnp(5)) then start_game() end
+ delay -= 1
+ 
+ if delay < 0 then
+  if (btnp(4)) then start_game()
+  elseif (btnp(5)) then menu() end
+ end
 end
 
 function update_player()
  local button_pressed = false
  if(btn(1)) then
-  player.spd_x += player_spd
+  player.spd_x += player.spd
   button_pressed = true
  elseif (btn(0)) then
-  player.spd_x -= player_spd
+  player.spd_x -= player.spd
   button_pressed = true
  elseif (btn(2)) then 
-  player.spd_y -= player_spd
+  player.spd_y -= player.spd
   button_pressed = true
  elseif (btn(3)) then
-  player.spd_y += player_spd
+  player.spd_y += player.spd
   button_pressed = true
  end 
  
@@ -122,16 +161,35 @@ function update_player()
 end
 
 function update_bullets()
- if (btn(4) and (t%7) == 0) then
-  local bullet = {}
-  bullet.x = player.x + 8
-  bullet.y = player.y + 4
-  add(bullets, bullet)
-  sfx(1)
+ if (btn(4)) then
+  if (t%7) == 0 and ships[current_ship+1][bullet_cap] == 1 then
+   local bullet = {}
+   bullet.x = player.x + 8
+   bullet.y = player.y + 4
+   bullet.dx = bullet_spd
+   bullet.dy = 0
+   add(bullets, bullet)
+   sfx(1)
+  elseif (t%15) == 0 and ships[current_ship+1][bullet_cap] == 2 then
+   local bullet1 = {}
+   local bullet2 = {}
+   bullet1.x = player.x + 8
+   bullet2.x = player.x + 8
+   bullet1.y = player.y + 1
+   bullet2.y = player.y + 7
+   bullet1.dx = bullet_spd
+   bullet2.dx = bullet_spd
+   bullet1.dy = -bullet_spd/2
+   bullet2.dy = bullet_spd/2
+   add(bullets, bullet1)
+   add(bullets, bullet2)
+   sfx(4)
+  end
  end
  
  for item in all(bullets) do
-  item.x += bullet_spd
+  item.x += item.dx
+  item.y += item.dy
   if item.x > playable_x_max then
    del(bullets, item)
   end
@@ -139,18 +197,32 @@ function update_bullets()
 end
 
 function update_asteroids()
- if flr(rnd(10)%10) == 1 then
+ if flr(rnd(15)%15) == 1 then
   local asteroid = {}
   asteroid.x = playable_x_max
   asteroid.y = playable_y_min + flr(rnd(playable_y_max-8-playable_y_min))
-  
-  if not(ast_overlap(asteroid.y)) then
+  asteroid.type = 1
+  asteroid.size = 8
+  asteroid.spd = asteroid_types[1][ast_spd]
+  if not(ast_overlap(asteroid.y,8)) then
    add(asteroids, asteroid)
   end
- end 
+ end
+ 
+ if flr(rnd(10)%10) == 1 then
+  local asteroid = {}
+  asteroid.type = 2 + flr(rnd(3.9))
+  asteroid.size = 4
+  asteroid.x = playable_x_max
+  asteroid.y = playable_y_min + flr(rnd(playable_y_max-4-playable_y_min))
+  asteroid.spd = asteroid_types[asteroid.type][ast_spd]
+  if not(ast_overlap(asteroid.y,4)) then
+   add(asteroids, asteroid)
+  end
+ end
  
  for item in all(asteroids) do
-  item.x -= asteroid_spd
+  item.x -= item.spd
   if item.x < -7 then
    del(asteroids, item)
   elseif hit_by_bullet(item) then   
@@ -177,8 +249,6 @@ function update_particles()
   --so that it lives the correct number of steps
   p.t += 1/p.life_time
   
-  -- todo: remove particle if out of frame
-  
   if p.t > 1 or 
    p.x < playable_x_min or
    p.x > playable_x_max or
@@ -200,19 +270,24 @@ function update_particles()
 end
 
 function _draw()
- if mode == "game" then 
+ if mode == "menu" then
+  draw_menu()
+ elseif mode == "game" then 
   draw_game()
  elseif mode == "gameover" then
   draw_gameover()
  end
- 
- if shake_screen > 1 then
-  shake()
-  shake_screen -= 1
- elseif shake_screen == 1 then
-  shake(true)
-  shake_screen -= 1
- end
+end
+
+function draw_menu()
+ cls()
+ rectfill(1,30,126,45,1)
+ print("press z to start and shoot",12,32,7)
+ -- draw current ship
+ rect(56,56,71,71,1)
+ spr(ships[current_ship+1][sprite],60,60)
+ spr(6,49,60)
+ spr(7,71,60)
 end
 
 function draw_game()
@@ -224,12 +299,21 @@ function draw_game()
  draw_player()
  draw_particles()
  draw_frame()
+ 
+ if shake_screen > 1 then
+  shake()
+  shake_screen -= 1
+ elseif shake_screen == 1 then
+  shake(true)
+  shake_screen -= 1
+ end
 end
 
 function draw_gameover()
- rectfill(1,60,126,75,1)
+ rectfill(1,60,126,80,1)
  print("game over",46,62,7)
- print("press — to restart",27,68,6)
+ print("press z to restart",27,68,6)
+ print("press x to go to menu",22,74,6)
 end
 
 function draw_frame()
@@ -238,7 +322,11 @@ end
 
 function draw_stars()
  for s in all(stars) do
-  pset((s.x-t*s.c)%128,s.y,s.col)
+  if abs(player.spd_x) < 0.3 then
+   pset((s.x-t*s.c)%128,s.y,s.col)
+  else 
+   rectfill((s.x-t*s.c)%128, s.y, (s.x-t*s.c)%128+12, s.y, s.col)
+  end
  end
 end
 
@@ -249,13 +337,14 @@ end
 
 function draw_player()
  if player_is_alive then
-  spr(1,player.x, player.y)
+  spr(player.sprt,player.x, player.y)
  else
   spr(explosion_stage, player.x, player.y)
   explosion_stage += 1
   if explosion_stage > 5 then
    camera(0,0)
-  	mode = "gameover"
+   mode = "gameover"
+   delay = 60
  	end  
  end
 end
@@ -268,7 +357,8 @@ end
 
 function draw_asteroids()
  for item in all(asteroids) do
-  spr(2,item.x, item.y)
+  local pos = asteroid_types[item.type][ast_position]
+  sspr(pos[1],pos[2],pos[3],pos[4],item.x, item.y)
  end
 end
 
@@ -279,10 +369,10 @@ function draw_particles()
 end
 
 -- helpers
-function ast_overlap(_y)
+function ast_overlap(_y,size)
  for item in all(asteroids) do
-  if item.x > playable_x_max - 8 then
-   if abs(item.y-_y) < 8 then
+  if item.x > playable_x_max - size then
+   if abs(item.y-_y) < size then
     return true
    end
   end 
@@ -292,7 +382,7 @@ end
 
 function hit_by_bullet(_ast)
  for bullet in all(bullets) do
-  if ball_box(bullet.x, bullet.y, _ast.x, _ast.y) then
+  if ball_box(bullet.x, bullet.y, _ast.x, _ast.y, _ast.size) then
    return true
   end
  end
@@ -300,22 +390,22 @@ function hit_by_bullet(_ast)
 end
 
 function hit_player(_ast)
- return box_box(player.x, player.y, _ast.x, _ast.y)
+ return box_box(player.x, player.y, 8, _ast.x, _ast.y, _ast.size)
 end
 
-function ball_box(bx,by,box_x,box_y)
- if by-bullet_r > box_y+8 then return false end
+function ball_box(bx,by,box_x,box_y,_size)
+ if by-bullet_r > box_y+_size then return false end
  if by+bullet_r < box_y then return false end
- if bx-bullet_r > box_x+8 then return false end
+ if bx-bullet_r > box_x+_size then return false end
  if bx+bullet_r < box_x then return false end
  return true
 end
 
-function box_box(box1_x,box1_y,box2_x,box2_y)
- if box1_y > box2_y+8 then return false end
- if box1_y+8 < box2_y then return false end
- if box1_x > box2_x+8 then return false end
- if box1_x+8 < box2_x then return false end
+function box_box(box1_x,box1_y,box1_size,box2_x,box2_y,box2_size)
+ if box1_y > box2_y+box2_size then return false end
+ if box1_y+box1_size < box2_y then return false end
+ if box1_x > box2_x+box2_size then return false end
+ if box1_x+box1_size < box2_x then return false end
  return true
 end
 
@@ -364,22 +454,22 @@ function make_particles(startx, starty)
 end
 
 __gfx__
-00000000999900000005550000980000000000000000000090055500000000000000000000000000000000000000000000000000000000000000000000000000
-00000000066666000055555008999008090080000000000009555990000000000000000000000000000000000000000000000000000000000000000000000000
-00700700055966600555655590a9999000909900009090000a959a55000000000000000000000000000000000000000000000000000000000000000000000000
-0007700005559666556555560aaaa990098a099009990000556a8556000000000000000000000000000000000000000000000000000000000000000000000000
-0007700005559666555555559a9a8900009aa900009a990055a88955000000000000000000000000000000000000000000000000000000000000000000000000
-007007000559666005565655980a9a9800909a8000a0900005a95a95000000000000000000000000000000000000000000000000000000000000000000000000
-00000000066666000055555600809900080090000000000009055509000000000000000000000000000000000000000000000000000000000000000000000000
-00000000999900000005650000090000000000000000000000056500000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000009999000000055600009800000000000000000000000d00000000d0007600744000000000000000000000000000000000000000000000000000000000
+00000000066677000055555008999008090080000000000000dd00000000dd004465446500000000000000000000000000000000000000000000000000000000
+00700700055966700555655590a9999000909900009090000ddd00000000ddd04645044600000000000000000000000000000000000000000000000000000000
+0007700005559667555555560aaaa990098a099009990000dddd00000000dddd0540045500000000000000000000000000000000000000000000000000000000
+0007700005559666555555659a9a8900009aa900009a9900dddd00000000dddd0650004400000000000000000000000000000000000000000000000000000000
+007007000559666005565555980a9a9800909a8000a090000ddd00000000ddd04445446400000000000000000000000000000000000000000000000000000000
+00000000066666000055555600809900080090000000000000dd00000000dd004464464500000000000000000000000000000000000000000000000000000000
+000000009999000000055550000900000000000000000000000d00000000d0004650445000000000000000000000000000000000000000000000000000000000
+99999000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+aa99aaaa000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+06665000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+06555000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+06555000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+06665000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+aa99aaaa000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+99999000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -534,7 +624,7 @@ __sfx__
 000100001445014450144401d4401d440144402b340293402733024330223301f3301d3001b300183000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 000600003365032650316502e6402b6402863025620226101f6100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00030000296502965029640296402823027630252202362022250202501e2501b2501a2501a1501a1501a1501a150162000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000100001415014150141401d3401d3401d34028340233401d2301623016200102001d3001b300183000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
